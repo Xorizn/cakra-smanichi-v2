@@ -193,7 +193,9 @@ export function EditQuizTypeDialog({
           </div>
           {/* Start Time Field */}
           <div className="space-y-1.5">
-            <Label htmlFor="type-edit-start-time">Start Time (Optional)</Label>
+            <Label htmlFor="type-edit-start-time">
+              Start Time - Hong Kong UTC+8 (Optional)
+            </Label>
             <Input
               id="type-edit-start-time"
               type="datetime-local"
@@ -202,7 +204,8 @@ export function EditQuizTypeDialog({
               disabled={isLoading}
             />
             <p className="text-xs text-muted-foreground">
-              Leave empty for immediate start.
+              Leave empty for immediate start. Times are in Hong Kong timezone
+              (UTC+8).
             </p>
           </div>
           {/* Visibility Switch */}

@@ -58,18 +58,45 @@ type UserAnswers = { [questionIndex: number]: string };
 
 const DEFAULT_QUIZ_DURATION_MINUTES = 60;
 
-const formatStartTimeForDisplay = (isoString: string | undefined): string => {
+const convertToHongKongTime = (date: Date | number): Date => {
+  const d = typeof date === "number" ? new Date(date) : new Date(date);
+
+  // Create date string in ISO format with Hong Kong UTC+8 offset
+  const hongKongDate = new Date(
+    d.toLocaleString("en-US", { timeZone: "Asia/Hong_Kong" })
+  );
+  return hongKongDate;
+};
+
+const getHongKongNow = (): number => {
+  return convertToHongKongTime(new Date()).getTime();
+};
+
+const formatHongKongTimeForDisplay = (
+  isoString: string | undefined
+): string => {
   if (!isoString) return "Any time";
   try {
-    return new Date(isoString).toLocaleString([], {
-      dateStyle: "medium",
-      timeStyle: "short",
-    });
+    // Create a date object from the ISO string
+    const date = new Date(isoString);
+
+    // Format it specifically for Hong Kong timezone
+    return (
+      date.toLocaleString("en-US", {
+        timeZone: "Asia/Hong_Kong",
+        dateStyle: "medium",
+        timeStyle: "short",
+        hour12: true,
+      }) + " (UTC+8 Hong Kong)"
+    );
   } catch (e) {
     return "Invalid Date";
   }
 };
 
+const formatStartTimeForDisplay = (isoString: string | undefined): string => {
+  return formatHongKongTimeForDisplay(isoString);
+};
 function QuizDisplayContent() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -179,14 +206,21 @@ function QuizDisplayContent() {
           return; // Stop further loading
         }
         // *** END ADDED CHECK ***
-
+        
         // 3. Check Start Time (only if public)
         if (startTimeISO) {
           try {
+            // Parse the scheduled start time from ISO
             const scheduledStartTime = new Date(startTimeISO).getTime();
-            if (Date.now() < scheduledStartTime) {
+
+            // Get current time in Hong Kong timezone
+            const hongKongNow = getHongKongNow();
+
+            if (hongKongNow < scheduledStartTime) {
               setIsQuizNotStarted(true);
-              setError(`Starts at: ${formatStartTimeForDisplay(startTimeISO)}`);
+              setError(
+                `Starts at: ${formatHongKongTimeForDisplay(startTimeISO)}`
+              );
               setIsLoading(false);
               return;
             }

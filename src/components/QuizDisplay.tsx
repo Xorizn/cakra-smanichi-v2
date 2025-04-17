@@ -314,6 +314,30 @@ function QuizDisplayContent() {
   }, [quizType, user, checkCompletionAndFetch]);
   // --- End Check/Fetch/Load Progress ---
 
+  useEffect(() => {
+    // Disable right-click
+    document.addEventListener("contextmenu", (e) => e.preventDefault());
+
+    // Disable text selection
+    document.addEventListener("selectstart", (e) => e.preventDefault());
+
+    // Disable copy
+    document.addEventListener("copy", (e) => e.preventDefault());
+
+    // Disable DevTools (basic F12)
+    document.addEventListener("keydown", (e) => {
+      if (
+        e.key === "F12" ||
+        (e.ctrlKey &&
+          e.shiftKey &&
+          (e.key === "I" || e.key === "J" || e.key === "C")) ||
+        (e.ctrlKey && e.key === "U") // view source
+      ) {
+        e.preventDefault();
+      }
+    });
+  }, []);
+
   // --- Answer Saving ---
   const handleAnswerSelect = useCallback(
     (index: number, answer: string) => {

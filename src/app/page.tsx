@@ -175,7 +175,7 @@ export default function AboutPage() {
       <section className="text-center">
         <h2 className="text-3xl font-bold mb-6">Bergabunglah Bersama Kami</h2>
         <p className="text-lg max-w-2xl mx-auto mb-8">
-          Jika kamu adalah siswa SMA N 1 Bangli yang memiliki semangat
+          Jika kamu adalah siswa yang memiliki semangat
           kemanusiaan tinggi dan ingin berkontribusi dalam kegiatan
           kepalangmerahan, bergabunglah dengan PMR Wira SMA N 1 Bangli!
         </p>
@@ -184,7 +184,7 @@ export default function AboutPage() {
           size="lg"
           className="bg-[#5dc7ee] hover:bg-[#4ab5dc] text-white"
         >
-          Daftar Sekarang
+          Bergabung Group Whatsapp
         </Button>
         </Link>
       </section>

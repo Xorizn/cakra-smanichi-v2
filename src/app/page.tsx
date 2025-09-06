@@ -19,6 +19,7 @@ import {
   Globe,
   Flame,
 } from "lucide-react";
+import Link from "next/link";
 
 export default function AboutPage() {
   const [activeIndex, setActiveIndex] = useState(0);
@@ -178,12 +179,14 @@ export default function AboutPage() {
           kemanusiaan tinggi dan ingin berkontribusi dalam kegiatan
           kepalangmerahan, bergabunglah dengan PMR Wira SMA N 1 Bangli!
         </p>
+        <Link href="https://chat.whatsapp.com/CXZhyghU8RvFrvKByJeUBi?mode=ems_copy_c">
         <Button
           size="lg"
           className="bg-[#5dc7ee] hover:bg-[#4ab5dc] text-white"
         >
           Daftar Sekarang
         </Button>
+        </Link>
       </section>
     </div>
   );

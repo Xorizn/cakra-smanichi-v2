@@ -503,23 +503,9 @@ function QuizDisplayContent() {
         <Ban className="w-12 h-12 text-blue-600 dark:text-blue-400" />
         <h2 className="text-xl font-semibold">Quiz Already Completed</h2>
         <p>You have already submitted the "{quizType || "this"}" quiz.</p>
-        {finalScoreData && (
-          <p>
-            Your score was: {finalScoreData.score} / {finalScoreData.total}
-          </p>
-        )}
         <Button onClick={() => router.push("/")} variant="outline">
           Go Home
         </Button>
-        <Link
-          href={`/ranking?type=${quizType}`}
-          className={cn(
-            buttonVariants({ variant: "link" }),
-            "text-blue-600 dark:text-blue-400"
-          )}
-        >
-          View Ranking
-        </Link>
       </div>
     );
   }
@@ -589,18 +575,6 @@ function QuizDisplayContent() {
           <div className="flex items-center">
             <CheckCircle className="mr-2 h-5 w-5" /> Quiz Submitted!
           </div>
-          <span>
-            Score: {displayScore} / {questions.length}
-          </span>
-          <Link
-            href={`/ranking?type=${quizType}`}
-            className={cn(
-              buttonVariants({ variant: "link" }),
-              "text-green-800 dark:text-green-200"
-            )}
-          >
-            View Ranking
-          </Link>
         </div>
       )}
       {/* Nav Grid */}

@@ -407,7 +407,7 @@ function QuizDisplayContent() {
       await rtdbRemove(progressRef);
       toast({
         title: "Quiz Submitted!",
-        description: `Score: ${score}/${questions.length}`,
+        description: `Score: in the process...`,
       });
     } catch (error) {
       /* ... error handling ... */
@@ -601,9 +601,9 @@ function QuizDisplayContent() {
                 isActive && !quizSubmitted
                   ? "bg-primary text-primary-foreground hover:bg-primary/90"
                   : isCorrect
-                  ? "bg-green-600 text-white hover:bg-green-700"
+                  ? "bg-muted text-muted-foreground hover:bg-muted/80"
                   : isIncorrect
-                  ? "bg-red-600 text-white hover:bg-red-700"
+                  ? "bg-muted text-muted-foreground hover:bg-muted/80"
                   : isAnswered
                   ? "bg-accent text-accent-foreground hover:bg-accent/90"
                   : "bg-muted text-muted-foreground hover:bg-muted/80"

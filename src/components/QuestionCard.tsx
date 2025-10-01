@@ -43,7 +43,9 @@ const QuestionCard: React.FC<QuestionProps> = ({
   return (
     <Card className="border-none shadow-none">
       <CardHeader className="p-0 mb-4">
-        <p>Q{questionIndex + 1}: {question.text}</p>
+        <p>
+          Q{questionIndex + 1}: {question.text}
+        </p>
       </CardHeader>
       <CardContent className="p-0">
         <RadioGroup
@@ -53,23 +55,30 @@ const QuestionCard: React.FC<QuestionProps> = ({
           disabled={isDisabled} // Disable the entire group if needed
         >
           {question.options.map((option) => (
-            <Label 
-              key={option} 
+            <Label
+              key={option}
               htmlFor={`${question.id}-${option}`}
               className={cn(
                 "flex items-center space-x-3 space-y-0 border rounded-md p-3 transition-colors",
-                isDisabled 
-                  ? "cursor-not-allowed opacity-70 bg-muted/50" 
+                isDisabled
+                  ? "cursor-not-allowed opacity-70 bg-muted/50"
                   : "cursor-pointer hover:bg-muted/50",
                 value === option && !isDisabled && "border-primary bg-muted", // Style for selected item (only if not disabled)
-                value === option && isDisabled && "border-primary bg-muted opacity-90", // Slightly different style for selected but disabled
-                 // Add styles to show correct/incorrect after submission (optional)
-                 isDisabled && option === question.correctAnswer && "border-green-500 bg-green-100/50 dark:bg-green-900/50",
-                 isDisabled && value === option && option !== question.correctAnswer && "border-red-500 bg-red-100/50 dark:bg-red-900/50"
+                value === option &&
+                  isDisabled &&
+                  "border-primary bg-muted opacity-90", // Slightly different style for selected but disabled
+                // Add styles to show correct/incorrect after submission (optional)
+                isDisabled &&
+                  option === question.correctAnswer &&
+                  "cursor-not-allowed opacity-70 bg-muted/50",
+                isDisabled &&
+                  value === option &&
+                  option !== question.correctAnswer &&
+                  "cursor-not-allowed opacity-70 bg-muted/50"
               )}
             >
-              <RadioGroupItem 
-                value={option} 
+              <RadioGroupItem
+                value={option}
                 id={`${question.id}-${option}`}
                 disabled={isDisabled} // Also disable individual items
               />

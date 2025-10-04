@@ -248,21 +248,21 @@ function QuizDisplayContent() {
         const rtdbQuestionsRef = ref(rtdb, `quizzes/${type}/questions`);
         const questionSnapshot = await get(rtdbQuestionsRef);
         if (!questionSnapshot.exists())
-          throw new Error(`Questions not found for quiz "${type}".`);
+          throw new Error(`Questions not found for quiz \"${type}\".`);
         const data = questionSnapshot.val();
         let fetchedQs: Question[] = [];
         if (Array.isArray(data)) {
           fetchedQs = data
-            .map((q, i) => (q ? { ...q, _key: String(i) } : null))
+            .map((q, i) => (q ? { ...q, id: String(i) } : null))
             .filter((q): q is Question => q !== null);
         } else if (typeof data === "object" && data !== null) {
           fetchedQs = Object.entries(data).map(([k, v]) => ({
-            ...(v as QuestionData),
-            _key: k,
+            ...(v as Question),
+            id: k,
           }));
         }
         if (fetchedQs.length === 0)
-          throw new Error(`Quiz "${type}" has no questions.`);
+          throw new Error(`Quiz \"${type}\" has no questions.`);
         setQuestions(fetchedQs);
 
         // 6. Set start time if not loaded
@@ -383,19 +383,46 @@ function QuizDisplayContent() {
     const timeTaken = Math.floor(
       (finishTime - (quizStartTime ?? finishTime)) / 1000
     );
-    let score = 0;
-    questions.forEach((q, i) => {
-      if (userAnswers[i] === q.correctAnswer) score++;
+    
+    let correctCount = 0;
+    let incorrectCount = 0;
+    const detailedAnswers = questions.map((q, i) => {
+      const userAnswer = userAnswers[i] ?? null;
+      const isCorrect = userAnswer !== null && userAnswer === q.correctAnswer;
+      
+      if (userAnswer !== null) {
+        if (isCorrect) {
+          correctCount++;
+        } else {
+          incorrectCount++;
+        }
+      }
+
+      return {
+        questionId: q.id,
+        chosenAnswer: userAnswer,
+        isCorrect,
+      };
     });
-    setFinalScoreData({ score: score, total: questions.length });
+
+    const unansweredCount = questions.length - (correctCount + incorrectCount);
+    const assessmentScore = (correctCount * 4) - incorrectCount;
+
+    setFinalScoreData({ score: correctCount, total: questions.length });
+
     const resultDataForRanking = {
       userId: user.uid,
       userName: user.displayName || user.email || "Anonymous",
       quizId: quizType,
-      score: score,
+      score: correctCount,
+      assessmentScore: assessmentScore,
       totalQuestions: questions.length,
+      correct: correctCount,
+      incorrect: incorrectCount,
+      unanswered: unansweredCount,
       timeTaken: timeTaken,
       finishedAt: Timestamp.fromMillis(finishTime),
+      answers: detailedAnswers,
     };
     try {
       const rankingResultRef = doc(
@@ -403,8 +430,8 @@ function QuizDisplayContent() {
         `${quizType}_${user.uid}_${resultDataForRanking.finishedAt.toMillis()}`
       );
       await setDoc(rankingResultRef, resultDataForRanking);
-      const progressRef = ref(rtdb, `userProgress/${user.uid}/${quizType}`);
-      await rtdbRemove(progressRef);
+      // const progressRef = ref(rtdb, `userProgress/${user.uid}/${quizType}`);
+      // await rtdbRemove(progressRef);
       toast({
         title: "Quiz Submitted!",
         description: `Score: in the process...`,
@@ -434,7 +461,7 @@ function QuizDisplayContent() {
     isLoading,
     isQuizPrivate,
   ]); // Added isQuizPrivate
-  // --- End Submission Logic ---
+  // --- End Submission Logic --
 
   // --- Timer Logic ---
   useEffect(() => {

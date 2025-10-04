@@ -4,12 +4,11 @@
 import { useState, useEffect, useCallback, Suspense } from "react";
 import { useRouter } from 'next/navigation';
 import { db, rtdb } from "@/lib/firebase";
-// Removed unused Firestore imports like Timestamp, serverTimestamp for this read/delete page
-import { collection, query, where, orderBy, limit, getDocs, deleteDoc, doc } from "firebase/firestore"; 
+import { collection, query, where, orderBy, limit, getDocs, deleteDoc, doc, Timestamp } from "firebase/firestore";
 import { ref, get as getRtdb } from "firebase/database";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
-import { AlertTriangle, Trash2, UserX, Filter } from "lucide-react";
+import { AlertTriangle, Trash2, Filter, Download, Eye } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -27,9 +26,8 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
-import { Timestamp } from "firebase/firestore"; // Keep Timestamp for type definition
 
-// Interface for results data from Firestore
+// Updated interface for detailed results
 interface ResultEntry {
     id: string; // Firestore document ID from quizResults
     userId: string;
@@ -38,13 +36,10 @@ interface ResultEntry {
     score: number;
     totalQuestions: number;
     timeTaken: number; // in seconds
-    finishedAt: Timestamp | { seconds: number; nanoseconds: number; }; 
-}
-
-// Interface for user data needed for deletion confirmation
-interface UserToDelete {
-    userId: string;
-    userName: string;
+    finishedAt: Timestamp | { seconds: number; nanoseconds: number; };
+    correct?: number;   // Number of correct answers
+    incorrect?: number; // Number of incorrect answers
+    blank?: number;     // Number of blank/unanswered questions
 }
 
 function ManageResultsContent() {
@@ -54,17 +49,13 @@ function ManageResultsContent() {
     const [results, setResults] = useState<ResultEntry[]>([]);
     const [quizTypes, setQuizTypes] = useState<string[]>([]);
     const [selectedQuizType, setSelectedQuizType] = useState<string>("all");
-    // Combine loading states for simplicity
-    const [isLoading, setIsLoading] = useState(true); 
-    const [isProcessing, setIsProcessing] = useState(false); // For delete actions
+    const [isLoading, setIsLoading] = useState(true);
+    const [isProcessing, setIsProcessing] = useState(false);
     const [error, setError] = useState<string | null>(null);
     
     const [isDeleteResultOpen, setIsDeleteResultOpen] = useState(false);
     const [resultToDelete, setResultToDelete] = useState<ResultEntry | null>(null);
-    const [isDeleteUserOpen, setIsDeleteUserOpen] = useState(false);
-    const [userToDelete, setUserToDelete] = useState<UserToDelete | null>(null);
 
-    // Fetch available quiz types for the filter dropdown
     const fetchQuizTypes = useCallback(async () => {
         try {
             const snapshot = await getRtdb(ref(rtdb, 'quizzes'));
@@ -73,155 +64,154 @@ function ManageResultsContent() {
         } catch (err) { console.error("Error fetching quiz types:", err); setQuizTypes(["all"]); }
     }, []);
 
-    // Fetch results based on selected filter
     const fetchResults = useCallback(async (filterType: string) => {
-        setIsLoading(true); setError(null); setResults([]); 
-        console.log(`Fetching results for type: ${filterType}`);
+        setIsLoading(true); setError(null); setResults([]);
         try {
             let q = query(
                 collection(db, "quizResults"),
                 orderBy("finishedAt", "desc"),
-                limit(100) 
+                limit(150)
             );
             if (filterType !== "all") q = query(q, where("quizId", "==", filterType));
 
             const querySnapshot = await getDocs(q);
-            if (querySnapshot.empty) console.log(`No results found for filter: ${filterType}`);
-            else {
-                const fetched = querySnapshot.docs.map(d => ({ id: d.id, ...d.data() } as ResultEntry));
+            if (querySnapshot.empty) {
+                setResults([]);
+            } else {
+                const fetched = querySnapshot.docs.map(d => {
+                    const data = d.data();
+                    const correct = data.correct;
+                    const incorrect = data.incorrect;
+                    const blank = (typeof correct === 'number' && typeof incorrect === 'number')
+                        ? data.totalQuestions - (correct + incorrect)
+                        : undefined;
+
+                    return {
+                        id: d.id,
+                        ...data,
+                        blank: blank,
+                    } as ResultEntry;
+                });
                 setResults(fetched);
-                console.log(`Fetched ${fetched.length} results.`);
             }
         } catch (err) {
             const msg = err instanceof Error ? err.message : "Could not load results.";
             setError(msg); toast({ title: "Error", description: msg, variant: "destructive" });
-            console.error("Error fetching results:", err);
         } finally { setIsLoading(false); }
     }, [toast]);
 
     useEffect(() => { fetchQuizTypes(); }, [fetchQuizTypes]);
     useEffect(() => { fetchResults(selectedQuizType); }, [selectedQuizType, fetchResults]);
 
-    // --- Delete Result Functions --- 
-    const initiateDeleteResult = (result: ResultEntry) => { setResultToDelete(result); setIsDeleteResultOpen(true); };
-
     const executeDeleteResult = async () => {
         if (!resultToDelete) return;
-        setIsProcessing(true); // Indicate action in progress
+        setIsProcessing(true);
         try {
-            // ONLY delete from quizResults
             const resultRef = doc(db, "quizResults", resultToDelete.id);
             await deleteDoc(resultRef);
-            console.log(`Deleted result doc: ${resultToDelete.id} from quizResults`);
             toast({ title: "Success", description: "Result entry deleted." });
-            setResults(prev => prev.filter(r => r.id !== resultToDelete.id)); // Update UI
+            setResults(prev => prev.filter(r => r.id !== resultToDelete.id));
         } catch (err) {
-             console.error("Error deleting result:", err);
-             let description = "Failed to delete result.";
-             if (err instanceof Error && err.message.includes("permission")) { description = "Permission denied."; }
-             else if (err instanceof Error) { description = err.message; }
-            toast({ title: "Error", description: description, variant: "destructive" });
+             const description = err instanceof Error ? err.message : "Failed to delete result.";
+            toast({ title: "Error", description, variant: "destructive" });
         } finally {
-            setIsDeleteResultOpen(false);
-            setResultToDelete(null);
-            setIsProcessing(false);
+            setIsDeleteResultOpen(false); setResultToDelete(null); setIsProcessing(false);
         }
     };
-    // --- End Delete Result Functions --- 
+    
+    const exportToCSV = () => {
+        if (results.length === 0) return;
+        const headers = ["User Name", "Quiz ID", "Score", "Correct", "Incorrect", "Blank", "Answered", "Total Questions", "Time Taken (s)", "Finished At"];
+        const csvRows = [headers.join(",")];
 
-     // --- Delete User Functions (Simulation Only) --- 
-    const initiateDeleteUser = (userId: string, userName: string) => { setUserToDelete({ userId, userName }); setIsDeleteUserOpen(true); };
+        results.forEach(r => {
+            const answered = (typeof r.correct === 'number' && typeof r.incorrect === 'number') ? r.correct + r.incorrect : 'N/A';
+            const finishedDate = r.finishedAt && typeof r.finishedAt === 'object' && r.finishedAt.seconds ? new Date(r.finishedAt.seconds * 1000).toISOString() : "N/A";
+            const row = [`"${r.userName || r.userId}"`, r.quizId, r.score, r.correct ?? "N/A", r.incorrect ?? "N/A", r.blank ?? "N/A", answered, r.totalQuestions, r.timeTaken, finishedDate];
+            csvRows.push(row.join(","));
+        });
 
-    const executeDeleteUser = async () => {
-        if (!userToDelete) return;
-        setIsProcessing(true);
-        console.warn(`SIMULATING Deletion for user ID: ${userToDelete.userId}. Requires Backend Function!`);
-        await new Promise(resolve => setTimeout(resolve, 1000)); 
-        toast({ title: "User Deletion (Simulated)", description: `User ${userToDelete.userName} marked for deletion.`, variant: "warning" });
-        setIsDeleteUserOpen(false); setUserToDelete(null); setIsProcessing(false);
-        // Note: We don't refresh results here as client-side sim doesn't remove their results
+        const blob = new Blob([csvRows.join("\n")], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.setAttribute("href", url);
+        link.setAttribute("download", `quiz-results-${selectedQuizType}-${new Date().toISOString().split('T')[0]}.csv`);
+        link.click();
+        toast({ title: "Success", description: "Results exported to CSV." });
     };
-    // --- End Delete User Functions --- 
 
-    // --- Helpers ---
-    const formatTime = (s: number) => isNaN(s)||s<0?"--:--":`${Math.floor(s/60)}m ${s%60}s`;
-    const formatDate = (ts: ResultEntry['finishedAt']) => !ts||typeof ts!=='object'||typeof ts.seconds!=='number'?"N/A":new Date(ts.seconds*1000).toLocaleDateString();
+    const formatTime = (s: number) => isNaN(s) || s < 0 ? "--:--" : `${Math.floor(s / 60)}m ${s % 60}s`;
+    const formatDate = (ts: ResultEntry['finishedAt']) => !ts || typeof ts !== 'object' || typeof ts.seconds !== 'number' ? "N/A" : new Date(ts.seconds * 1000).toLocaleDateString();
 
     return (
         <div className="container mx-auto py-8">
             <div className="flex flex-col sm:flex-row justify-between items-center mb-8 gap-4">
                 <h1 className="text-3xl font-bold text-center sm:text-left">Manage Quiz Results</h1>
                  <div className="flex items-center gap-2">
+                     <Button onClick={exportToCSV} disabled={isLoading || results.length === 0}><Download className="mr-2 h-4 w-4" />Export</Button>
                      <Filter className="h-4 w-4 text-muted-foreground"/>
                      <Select value={selectedQuizType} onValueChange={setSelectedQuizType} disabled={isLoading || isProcessing}>
                         <SelectTrigger className="w-[180px]"><SelectValue placeholder="Filter..." /></SelectTrigger>
-                        <SelectContent>{quizTypes.map(t => <SelectItem key={t} value={t} className="capitalize">{t==="all"?"All Quizzes":t}</SelectItem>)}</SelectContent>
+                        <SelectContent>{quizTypes.map(t => <SelectItem key={t} value={t} className="capitalize">{t === "all" ? "All Quizzes" : t}</SelectItem>)}</SelectContent>
                     </Select>
                  </div>
             </div>
 
-            {isLoading && <AdminPageLoadingSkeleton />} 
-            {error && (
-                <Card className="bg-destructive/10 border-destructive mb-6">
-                    <CardHeader><CardTitle className="flex items-center gap-2 text-destructive"><AlertTriangle/> Error</CardTitle></CardHeader>
-                    <CardContent><p>{error}</p></CardContent>
-                </Card>
-            )}
-            {!isLoading && !error && results.length === 0 && (
-                 <div className="text-center text-muted-foreground py-10"><p>No results found{selectedQuizType !== 'all' ? ` for "${selectedQuizType}"` : ''}.</p></div>
-            )}
+            {isLoading && <AdminPageLoadingSkeleton />}
+            {error && <Card className="bg-destructive/10 border-destructive"><CardHeader><CardTitle className="flex items-center gap-2 text-destructive"><AlertTriangle/> Error</CardTitle></CardHeader><CardContent><p>{error}</p></CardContent></Card>}
+            {!isLoading && !error && results.length === 0 && <div className="text-center text-muted-foreground py-10"><p>No results found{selectedQuizType !== 'all' ? ` for "${selectedQuizType}"` : ''}.</p></div>}
             {!isLoading && !error && results.length > 0 && (
                  <Card>
                      <CardContent className="p-0">
-                         <Table>
-                             <TableHeader>
-                                <TableRow>
-                                    <TableHead>User</TableHead><TableHead>Quiz</TableHead><TableHead className="text-center">Score</TableHead>
-                                    <TableHead className="text-center">Time</TableHead><TableHead className="text-right">Date</TableHead><TableHead className="text-right">Actions</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {results.map((r) => (
-                                    <TableRow key={r.id}>
-                                        <TableCell className="font-medium">{r.userName||r.userId.substring(0,6)+'...'}</TableCell><TableCell className="capitalize">{r.quizId}</TableCell>
-                                        <TableCell className="text-center">{r.score}/{r.totalQuestions}</TableCell><TableCell className="text-center">{formatTime(r.timeTaken)}</TableCell>
-                                        <TableCell className="text-right">{formatDate(r.finishedAt)}</TableCell>
-                                        <TableCell className="text-right space-x-1">
-                                             <Button variant="ghost" size="icon" onClick={() => initiateDeleteResult(r)} title="Delete Result" disabled={isProcessing} className="text-red-500 hover:text-red-700"><Trash2 className="h-4 w-4" /></Button>
-
-                                        </TableCell>
+                         <div className="overflow-x-auto">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>User</TableHead><TableHead>Quiz</TableHead>
+                                        <TableHead className="text-center">Answered / Total</TableHead>
+                                        <TableHead className="text-center text-green-600">Correct</TableHead>
+                                        <TableHead className="text-center text-red-600">Incorrect</TableHead>
+                                        <TableHead className="text-center text-yellow-600">Blank</TableHead>
+                                        <TableHead className="text-center">Time</TableHead><TableHead className="text-right">Date</TableHead>
+                                        <TableHead className="text-right">Actions</TableHead>
                                     </TableRow>
-                                ))}
-                            </TableBody>
-                        </Table>
+                                </TableHeader>
+                                <TableBody>
+                                    {results.map((r) => (
+                                        <TableRow key={r.id}>
+                                            <TableCell className="font-medium whitespace-nowrap">{r.userName || r.userId.substring(0, 6) + '...'}</TableCell>
+                                            <TableCell className="capitalize whitespace-nowrap">{r.quizId}</TableCell>
+                                            <TableCell className="text-center font-mono">{typeof r.correct === 'number' && typeof r.incorrect === 'number' ? r.correct + r.incorrect : 'N/A'} / {r.totalQuestions}</TableCell>
+                                            <TableCell className="text-center font-medium text-green-600">{r.correct ?? 'N/A'}</TableCell>
+                                            <TableCell className="text-center font-medium text-red-600">{r.incorrect ?? 'N/A'}</TableCell>
+                                            <TableCell className="text-center font-medium text-yellow-600">{r.blank ?? 'N/A'}</TableCell>
+                                            <TableCell className="text-center whitespace-nowrap">{formatTime(r.timeTaken)}</TableCell>
+                                            <TableCell className="text-right whitespace-nowrap">{formatDate(r.finishedAt)}</TableCell>
+                                            <TableCell className="text-right space-x-1">
+                                                <Link href={`/admin/results/${r.id}`} className={cn(buttonVariants({ variant: "ghost", size: "icon" }), "text-blue-500 hover:text-blue-700")} title="View Details">
+                                                    <Eye className="h-4 w-4" />
+                                                </Link>
+                                                <Button variant="ghost" size="icon" onClick={() => { setResultToDelete(r); setIsDeleteResultOpen(true); }} title="Delete Result" disabled={isProcessing} className="text-red-500 hover:text-red-700"><Trash2 className="h-4 w-4" /></Button>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                         </div>
                     </CardContent>
                  </Card>
             )}
             
             <div className="mt-8"><Link href="/admin" className={cn(buttonVariants({ variant: 'ghost' }))}>&larr; Back</Link></div>
 
-            {/* Dialogs */} 
             <AlertDialog open={isDeleteResultOpen} onOpenChange={setIsDeleteResultOpen}>
                  <AlertDialogContent>
                     <AlertDialogHeader><AlertDialogTitle>Delete Quiz Result?</AlertDialogTitle>
-                        <AlertDialogDescription>Delete result for <span className="font-medium">{resultToDelete?.userName}</span> on <span className="font-medium capitalize">{resultToDelete?.quizId}</span>? This removes it from rankings.</AlertDialogDescription>
+                        <AlertDialogDescription>Delete result for <span className="font-medium">{resultToDelete?.userName}</span> on <span className="font-medium capitalize">{resultToDelete?.quizId}</span>? This is permanent.</AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                         <AlertDialogCancel onClick={() => setResultToDelete(null)}>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={executeDeleteResult} disabled={isProcessing} className={buttonVariants({ variant: "destructive" })}>{isProcessing?"Deleting...":"Delete Result"}</AlertDialogAction>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-            </AlertDialog>
-            <AlertDialog open={isDeleteUserOpen} onOpenChange={setIsDeleteUserOpen}>
-                <AlertDialogContent>
-                    <AlertDialogHeader><AlertDialogTitle className="text-destructive">Delete User Account?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                            Permanently delete user <span className="font-medium">{userToDelete?.userName}</span> ({userToDelete?.userId})? <strong className="text-destructive block mt-2">Requires backend function. Cannot be undone.</strong>
-                        </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                        <AlertDialogCancel onClick={() => setUserToDelete(null)}>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={executeDeleteUser} disabled={isProcessing} className={buttonVariants({ variant: "destructive" })}>{isProcessing?"Processing...":"Delete User (Simulated)"}</AlertDialogAction>
+                        <AlertDialogAction onClick={executeDeleteResult} disabled={isProcessing} className={buttonVariants({ variant: "destructive" })}>{isProcessing ? "Deleting..." : "Delete Result"}</AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
@@ -231,7 +221,7 @@ function ManageResultsContent() {
 
 export default function ResultsAdminPage() {
     return (
-        <Suspense fallback={<AdminPageLoadingSkeleton />}> 
+        <Suspense fallback={<AdminPageLoadingSkeleton />}>
             <ManageResultsContent />
         </Suspense>
     );
